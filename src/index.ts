@@ -201,7 +201,7 @@ type MagikScribeLevels = keyof typeof MagikLogTransportLevels.levels
 type UniqueLogKeys = Exclude<MagikScribeLevels, keyof Logger>;
 type UniqueLogMethods = Record<UniqueLogKeys, (message: string, meta?: unknown) => void>;
 
-export class MagikLogger<ServiceName = string> extends Logger implements UniqueLogMethods {
+export class MagikLogger<ServiceName extends string = string> extends Logger implements UniqueLogMethods {
   serviceName: ServiceName;
 
   constructor(options: LoggerOptions & { service: ServiceName }) {
@@ -213,7 +213,7 @@ export class MagikLogger<ServiceName = string> extends Logger implements UniqueL
     return this.log({ level: 'success', message, meta });
   }
 
-  box(message: string, meta?: unknown) {
+  box(message: any, meta?: unknown) {
     return this.log({ level: 'box', message, meta });
   }
 
@@ -251,6 +251,7 @@ interface MagikLogOptions<Service extends string = string> extends LoggerOptions
  * console.log(serverIsGone); // true
  */
 export class MagikLogs<Services extends Array<string> = Array<string>> {
+  private services: Services = [] as unknown as Services;
   private scribeHall: Entity<MagikLogger, Services[number]> = new Entity();
 
   /** The transport levels for logging */
@@ -293,16 +294,16 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
    * @param {Services} options.services - The array of service names.
    */
   constructor({ services }: { services: Services }) {
-    this.initializeServices(services);
+    this.services = services;
+    this.initializeServices();
   }
 
   /**
    * Initializes the services and creates default loggers for each service.
-   * @param {Services} services - The array of service names.
    * @private
    */
-  private initializeServices(services: Services) {
-    services.forEach(service => {
+  private initializeServices() {
+    this.services.forEach(service => {
       this.scribeHall.add(service, this.createDefaultLogger({ service }));
     });
   }
@@ -314,7 +315,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
    * @returns {MagikLogger} The created logger.
    * @private
    */
-  private createDefaultLogger<Service extends Services[number] | string = Services[number] | string>(opts: MagikLogOptions<Service>): MagikLogger {
+  private createDefaultLogger<Service extends Services[number] = Services[number]>(opts: MagikLogOptions<Service>): MagikLogger<Service> {
     const { service, ...options } = opts;
     const productionTransports = [
       new DailyRotateFile({
@@ -329,7 +330,6 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
         format: filterLevelsThenFormatAsJSON({ min: 'warn', max: 'debug' }),
       }),
     ] as TransportStream[];
-
 
     return createLogger({
       levels: this.transportLevels,
