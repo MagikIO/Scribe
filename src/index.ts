@@ -97,12 +97,12 @@ class LogFormatters {
     format.printf(
       ({ prefix, message, timestamp, data, dontTimestamp }) => {
         let response = '';
-        if (prefix) response += `${gradient.mind(prefix)} -> `;
-        response += (prefix) ? `${gradient.cristal(message)}` : `${gradient.mind(message)}`;
+        if (prefix) response += `${gradient.mind(prefix as string)} -> `;
+        response += (prefix) ? `${gradient.cristal(message as string)}` : `${gradient.mind(message as string)}`;
         if (!data) return response.trim();
 
-        if (typeof data !== 'object' && Array.isArray(data) === false) response += ` ${yellowGradient(data)}`;
-        if (!dontTimestamp) response += ` -| ${greenGradient(ChronoFormatters.USTime(timestamp, true))} |-`;
+        if (typeof data !== 'object' && Array.isArray(data) === false) response += ` ${yellowGradient(data as string)}`;
+        if (!dontTimestamp) response += ` -| ${greenGradient(ChronoFormatters.USTime(timestamp as Date, true))} |-`;
         if (data && typeof (data) === 'object') {
           response += `\n${JSON.stringify(
             data,
@@ -128,11 +128,11 @@ class LogFormatters {
       info => (
         (info.prefix)
           ? (info.data)
-            ? `${gradient.mind(`${info.prefix}-[${info.level.toLocaleUpperCase()}]`)}-> ${info.message} ${yellowGradient(info.data)} -| ${ChronoFormatters.USTime(info.timestamp)} |-`
-            : `${gradient.mind(`${info.prefix}-[${info.level.toLocaleUpperCase()}]`)}-> ${info.message} -| ${ChronoFormatters.USTime(info.timestamp)} |-`
+            ? `${gradient.mind(`${info.prefix}-[${info.level.toLocaleUpperCase()}]`)}-> ${info.message} ${yellowGradient(info.data as string)} -| ${ChronoFormatters.USTime(info.timestamp as Date)} |-`
+            : `${gradient.mind(`${info.prefix}-[${info.level.toLocaleUpperCase()}]`)}-> ${info.message} -| ${ChronoFormatters.USTime(info.timestamp as Date)} |-`
           : (info.data)
-            ? `${gradient.mind(`[${info.level.toLocaleUpperCase()}]`)}: ${info.message} ${yellowGradient(info.data)} -| ${ChronoFormatters.USTime(info.timestamp)} |-`
-            : `${gradient.mind(`[${info.level.toLocaleUpperCase()}]`)}: ${info.message} -| ${ChronoFormatters.USTime(info.timestamp)} |-`),
+            ? `${gradient.mind(`[${info.level.toLocaleUpperCase()}]`)}: ${info.message} ${yellowGradient(info.data as string)} -| ${ChronoFormatters.USTime(info.timestamp as Date)} |-`
+            : `${gradient.mind(`[${info.level.toLocaleUpperCase()}]`)}: ${info.message} -| ${ChronoFormatters.USTime(info.timestamp as Date)} |-`),
     ),
   );
 }
@@ -189,7 +189,7 @@ export class MagikLogTransportLevels {
   }
 
   public static getLevelName(level: number) {
-    return (Object.keys(this.levels) as MagikScribeLevels[]).find((key) => this.levels[key] === level)
+    return (Object.keys(this.levels) as MagikScribeLevels[]).find(key => this.levels[key] === level)
   }
 
   public static setLevels(levels: Record<MagikScribeLevels, number>) {
@@ -276,8 +276,8 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
     return MagikLogs.devLogTransports;
   }
 
-  public set devTransports(transports: ConsolaTransport[]) {
-    MagikLogs.devLogTransports = transports;
+  public set devTransports(devTransports: ConsolaTransport[]) {
+    MagikLogs.devLogTransports = devTransports;
   }
 
   static get ConsolaTransport() {
@@ -303,7 +303,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
    * @private
    */
   private initializeServices() {
-    this.services.forEach(service => {
+    this.services.forEach((service) => {
       this.scribeHall.add(service, this.createDefaultLogger({ service }));
     });
   }
