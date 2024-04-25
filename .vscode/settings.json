@@ -6,8 +6,8 @@
     "**/CVS": false,
     "**/.DS_Store": false,
     "**/Thumbs.db": false,
-    "**/.*": true,
-    "eslint*.*": true
+    "**/.*": false,
+    "eslint*.*": false
   },
   "explorerExclude.backup": {},
   "search.exclude": {

@@ -3,6 +3,7 @@
 .yarn
 .vscode
 tsconfig.json
-eslint.config.mjs
+eslint.config.*
 .editorconfig
 .gitattributes
+.gitignore
