@@ -1,5 +1,6 @@
 import Entity from '@anandamideio/entity';
 import consola from 'consola';
+import CustomTransport from 'winston-transport';
 import WebSocket from 'ws';
 import gradient from 'gradient-string';
 import { createLogger, format, Logger, transports, type LoggerOptions } from 'winston';
@@ -174,7 +175,7 @@ class ConsolaTransport extends transports.Console {
   }
 }
 
-class WebSocketTransport extends transports.Stream {
+class WebSocketTransport extends CustomTransport {
   wss: WebSocket.Server;
 
   constructor(options: any & { ws: WebSocket | WebSocket.Server }) {
