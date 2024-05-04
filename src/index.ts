@@ -1,5 +1,6 @@
 import Entity from '@anandamideio/entity';
 import consola from 'consola';
+import WebSocket from 'ws';
 import gradient from 'gradient-string';
 import { createLogger, format, Logger, transports, type LoggerOptions } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
@@ -173,6 +174,39 @@ class ConsolaTransport extends transports.Console {
   }
 }
 
+class WebSocketTransport extends transports.Stream {
+  wss: WebSocket.Server;
+
+  constructor(options: any & { ws: WebSocket | WebSocket.Server }) {
+    super(options);
+    if (options.ws instanceof WebSocket) {
+      this.wss = new WebSocket.Server({ server: options.ws });
+    } else {
+      this.wss = options.ws;
+    }
+    this.wss.on('connection', (ws) => {
+      this.wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send('Client connected');
+        }
+      });
+    });
+  }
+
+  log(info: { level: keyof typeof MagikLogTransportLevels['levels']; message: string; }, callback: () => void) {
+    setImmediate(() => this.emit('logged', info));
+
+    // Send the log message to all connected WebSocket clients
+    this.wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(info.message);
+      }
+    });
+
+    callback();
+  }
+}
+
 export class MagikLogTransportLevels {
   public static levels = {
     error: 0,
@@ -254,6 +288,7 @@ interface MagikLogOptions<Service extends string = string> extends LoggerOptions
 export class MagikLogs<Services extends Array<string> = Array<string>> {
   private services: Services = [] as unknown as Services;
   private scribeHall: Entity<MagikLogger, Services[number]> = new Entity();
+  protected wsInstance?: WebSocket | WebSocket.Server;
 
   /** The transport levels for logging */
   private transportLevels = MagikLogTransportLevels.levels;
@@ -263,8 +298,17 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
     datePattern: 'MM-DD-YYYY', zippedArchive: true, maxSize: '20m', maxFiles: '14d',
   }
 
+  private initializeTransports() {
+    if (this.wsInstance) {
+      this.devTransports.push(new WebSocketTransport({
+        ws: this.wsInstance,
+        format: filterLevelsThenFormatForConsola({ min: 'error', max: 'box' }),
+      }));
+    }
+  }
+
   /** Development log transports. */
-  public static devLogTransports = [
+  public static devLogTransports: Array<ConsolaTransport | WebSocketTransport> = [
     new ConsolaTransport({
       format: filterLevelsThenFormatForConsola({ min: 'error', max: 'internal' }),
     }),
@@ -277,7 +321,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
     return MagikLogs.devLogTransports;
   }
 
-  public set devTransports(devTransports: ConsolaTransport[]) {
+  public set devTransports(devTransports: (ConsolaTransport | WebSocketTransport)[]) {
     MagikLogs.devLogTransports = devTransports;
   }
 
@@ -293,10 +337,13 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
    * Constructs a new instance of MagikLogs.
    * @param {{ services: Array<string> }} options - The options for the MagikLogs instance.
    * @param {Services} options.services - The array of service names.
+   * @param {WebSocket|WebSocket.Server} options.ws - The WebSocket instance to use for logging.
    */
-  constructor({ services }: { services: Services }) {
+  constructor({ services, ws }: { services: Services, ws?: WebSocket | WebSocket.Server }) {
     this.services = services;
+    this.wsInstance = ws;
     this.initializeServices();
+    this.initializeTransports()
   }
 
   /**
