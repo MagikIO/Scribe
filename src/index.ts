@@ -7,6 +7,7 @@ import { createLogger, format, Logger, transports, type LoggerOptions } from 'wi
 import DailyRotateFile from 'winston-daily-rotate-file';
 import TransportStream from 'winston-transport';
 import type { Server } from 'node:http';
+import type { EventEmitter } from 'node:stream';
 
 const greenGradient = gradient([
   { color: '#00FF00', pos: 0 }, { color: '#00e500', pos: 0.5 }, { color: '#00cc00', pos: 1 },
@@ -286,7 +287,7 @@ interface MagikLogOptions<Service extends string = string> extends LoggerOptions
 export class MagikLogs<Services extends Array<string> = Array<string>> {
   protected services: Services = [] as unknown as Services;
   protected scribeHall: Entity<MagikLogger, Services[number]> = new Entity();
-  protected server?: Server
+  protected eventEmitter?: EventEmitter
 
   /** The transport levels for logging */
   protected transportLevels = MagikLogTransportLevels.levels;
@@ -300,21 +301,23 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
  * Constructs a new instance of MagikLogs.
  * @param {{ services: Array<string> }} options - The options for the MagikLogs instance.
  * @param {Services} options.services - The array of service names.
- * @param {Server} options.server - The WebSocket instance to use for logging.
+ * @param {EventEmitter} options.eventEmitter - The WebSocket instance to use for logging.
  */
-  constructor({ services, server }: { services: Services, server?: Server }) {
+  constructor({ services, eventEmitter }: { services: Services, eventEmitter?: EventEmitter }) {
     this.services = services;
-    this.server = server;
+    this.eventEmitter = eventEmitter;
     this.initializeServices();
     this.initializeTransports()
   }
 
   protected initializeTransports() {
-    if (this.server) {
-      this.devTransports.push(new WebSocketTransport({
-        server: this.server,
-        format: filterLevelsThenFormatForConsola({ min: 'error', max: 'box' }),
-      }));
+    if (this.eventEmitter) {
+      this.eventEmitter.on('Magik:ServerStarted', (server: Server) => {
+        this.devTransports.push(new WebSocketTransport({
+          server,
+          format: filterLevelsThenFormatForConsola({ min: 'error', max: 'box' }),
+        }));
+      })
     }
   }
 
