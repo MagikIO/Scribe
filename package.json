@@ -1,6 +1,6 @@
 {
   "name": "@magik_io/scribe",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json"
@@ -35,5 +35,8 @@
     "typescript": "^5.4.5",
     "typescript-eslint": "^7.8.0"
   },
-  "packageManager": "yarn@4.1.1"
+  "packageManager": "yarn@4.1.1",
+  "optionalDependencies": {
+    "bufferutil": "^4.0.8"
+  }
 }
