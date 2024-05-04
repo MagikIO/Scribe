@@ -152,7 +152,7 @@ class ConsolaTransport extends transports.Console {
 
     if (level === 'error') {
       consola.error(formattedMessage);
-      consola.trace(meta);
+      console.trace(meta);
     } else if (level === 'warn') {
       consola.warn(formattedMessage);
     } else if (level === 'info') {
@@ -177,16 +177,18 @@ class ConsolaTransport extends transports.Console {
   }
 }
 
-class WebSocketTransport extends CustomTransport {
-  wss: WebSocket.Server;
+class WebSocketConsolaTransport extends transports.Console {
+  protected wss: WebSocket.Server;
 
-  constructor(options: any & { server: Server }) {
+  constructor(options: any & { server: Server, debug?: boolean }) {
     super(options);
     this.wss = new WebSocket.Server({ server: options.server });
+    if (options.debug) consola.info('MagikWebSocketTransport initialized with the following options:', options);
     this.wss.on('connection', (ws) => {
+      if (options.debug) consola.info('WebSocket client connected', ws);
       this.wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-          client.send('Client connected');
+          client.send('MagikScribe has noticed as new client, welcome');
         }
       });
     });
@@ -195,12 +197,39 @@ class WebSocketTransport extends CustomTransport {
   log(info: { level: keyof typeof MagikLogTransportLevels['levels']; message: string; }, callback: () => void) {
     setImmediate(() => this.emit('logged', info));
 
+    const { level, message, ...meta } = info;
+
     // Send the log message to all connected WebSocket clients
     this.wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(info.message);
+        client.send(message);
       }
     });
+
+    const formattedMessage = gradient.mind(message);
+
+    if (level === 'error') {
+      consola.error(formattedMessage);
+      console.trace(meta);
+    } else if (level === 'warn') {
+      consola.warn(formattedMessage);
+    } else if (level === 'info') {
+      consola.info(formattedMessage);
+    } else if (level === 'verbose') {
+      consola.info(formattedMessage);
+    } else if (level === 'debug') {
+      consola.debug(formattedMessage);
+    } else if (level === 'success') {
+      consola.success(formattedMessage);
+    } else if (level === 'box') {
+      if ('name' in meta && typeof meta.name === 'string') {
+        MagikLogs.prototype._prettyLogBox(meta.name, message);
+      } else {
+        consola.box(formattedMessage);
+      }
+    } else if (level === 'internal') {
+      consola.log(formattedMessage);
+    }
 
     callback();
   }
@@ -288,6 +317,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
   protected services: Services = [] as unknown as Services;
   protected scribeHall: Entity<MagikLogger, Services[number]> = new Entity();
   protected eventEmitter?: EventEmitter
+  protected debug = false;
 
   /** The transport levels for logging */
   protected transportLevels = MagikLogTransportLevels.levels;
@@ -303,27 +333,15 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
  * @param {Services} options.services - The array of service names.
  * @param {EventEmitter} options.eventEmitter - The WebSocket instance to use for logging.
  */
-  constructor({ services, eventEmitter }: { services: Services, eventEmitter?: EventEmitter }) {
+  constructor({ services, eventEmitter, debug }: { services: Services, eventEmitter?: EventEmitter, debug?: boolean }) {
+    this.debug = debug ?? false;
     this.services = services;
     this.eventEmitter = eventEmitter;
-    consola.info('MagikLogs initialized with the follow:', { services, eventEmitter });
-    this.initializeTransports();
     this.initializeServices();
   }
 
-  protected initializeTransports() {
-    if (this.eventEmitter) {
-      this.eventEmitter.on('Magik:ServerStarted', (server: Server) => {
-        this.devTransports.push(new WebSocketTransport({
-          server,
-          format: filterLevelsThenFormatForConsola({ min: 'error', max: 'box' }),
-        }));
-      })
-    }
-  }
-
   /** Development log transports. */
-  public static devLogTransports: Array<ConsolaTransport | WebSocketTransport> = [
+  public devLogTransports: Array<ConsolaTransport> = [
     new ConsolaTransport({
       format: filterLevelsThenFormatForConsola({ min: 'error', max: 'internal' }),
     }),
@@ -332,21 +350,16 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
     }),
   ]
 
-  public get devTransports() {
-    return MagikLogs.devLogTransports;
-  }
-
-  public set devTransports(devTransports: (ConsolaTransport | WebSocketTransport)[]) {
-    MagikLogs.devLogTransports = devTransports;
-  }
-
-  static get ConsolaTransport() {
-    return ConsolaTransport;
-  }
-
-  public get ConsolaTransportClass() {
-    return ConsolaTransport;
-  }
+  public devLogWithWebSocketTransports = (server: Server) => ([
+    new WebSocketConsolaTransport({
+      server,
+      format: filterLevelsThenFormatForConsola({ min: 'error', max: 'internal' }),
+    }),
+    new WebSocketConsolaTransport({
+      server,
+      level: 'box', format: filterLevelsThenFormatForConsola({ min: 'box', max: 'box' }),
+    }),
+  ])
 
   /**
    * Initializes the services and creates default loggers for each service.
@@ -381,10 +394,23 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
       }),
     ] as TransportStream[];
 
+    if (this.eventEmitter) {
+      this.eventEmitter.on('Magik:ServerStarted', (server: Server) => {
+        if (this.debug) consola.info('WebSocketTransport initialized with the following options:', { server });
+        return createLogger({
+          levels: this.transportLevels,
+          defaultMeta: { service, ...options.defaultMeta },
+          transports: this.devLogWithWebSocketTransports(server),
+        }) as MagikLogger<typeof service>;
+      })
+    }
+
     return createLogger({
       levels: this.transportLevels,
       defaultMeta: { service, ...options.defaultMeta },
-      transports: (process.env.NODE_ENV === 'production') ? productionTransports : MagikLogs.devLogTransports,
+      transports: (process.env.NODE_ENV === 'production')
+        ? productionTransports
+        : this.devLogTransports,
     }) as MagikLogger<typeof service>;
   }
 
