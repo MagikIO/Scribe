@@ -6,6 +6,7 @@ import gradient from 'gradient-string';
 import { createLogger, format, Logger, transports, type LoggerOptions } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import TransportStream from 'winston-transport';
+import type { Server } from 'node:http';
 
 const greenGradient = gradient([
   { color: '#00FF00', pos: 0 }, { color: '#00e500', pos: 0.5 }, { color: '#00cc00', pos: 1 },
@@ -178,13 +179,9 @@ class ConsolaTransport extends transports.Console {
 class WebSocketTransport extends CustomTransport {
   wss: WebSocket.Server;
 
-  constructor(options: any & { ws: WebSocket | WebSocket.Server }) {
+  constructor(options: any & { server: Server }) {
     super(options);
-    if (options.ws instanceof WebSocket) {
-      this.wss = new WebSocket.Server({ server: options.ws });
-    } else {
-      this.wss = options.ws;
-    }
+    this.wss = new WebSocket.Server({ server: options.server });
     this.wss.on('connection', (ws) => {
       this.wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -287,22 +284,35 @@ interface MagikLogOptions<Service extends string = string> extends LoggerOptions
  * console.log(serverIsGone); // true
  */
 export class MagikLogs<Services extends Array<string> = Array<string>> {
-  private services: Services = [] as unknown as Services;
-  private scribeHall: Entity<MagikLogger, Services[number]> = new Entity();
-  protected wsInstance?: WebSocket | WebSocket.Server;
+  protected services: Services = [] as unknown as Services;
+  protected scribeHall: Entity<MagikLogger, Services[number]> = new Entity();
+  protected server?: Server
 
   /** The transport levels for logging */
-  private transportLevels = MagikLogTransportLevels.levels;
+  protected transportLevels = MagikLogTransportLevels.levels;
 
   /** Default options for log file */
   public static defaultLogFileOptions = {
     datePattern: 'MM-DD-YYYY', zippedArchive: true, maxSize: '20m', maxFiles: '14d',
   }
 
-  private initializeTransports() {
-    if (this.wsInstance) {
+  /**
+ * Constructs a new instance of MagikLogs.
+ * @param {{ services: Array<string> }} options - The options for the MagikLogs instance.
+ * @param {Services} options.services - The array of service names.
+ * @param {Server} options.server - The WebSocket instance to use for logging.
+ */
+  constructor({ services, server }: { services: Services, server?: Server }) {
+    this.services = services;
+    this.server = server;
+    this.initializeServices();
+    this.initializeTransports()
+  }
+
+  protected initializeTransports() {
+    if (this.server) {
       this.devTransports.push(new WebSocketTransport({
-        ws: this.wsInstance,
+        server: this.server,
         format: filterLevelsThenFormatForConsola({ min: 'error', max: 'box' }),
       }));
     }
@@ -335,23 +345,10 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
   }
 
   /**
-   * Constructs a new instance of MagikLogs.
-   * @param {{ services: Array<string> }} options - The options for the MagikLogs instance.
-   * @param {Services} options.services - The array of service names.
-   * @param {WebSocket|WebSocket.Server} options.ws - The WebSocket instance to use for logging.
-   */
-  constructor({ services, ws }: { services: Services, ws?: WebSocket | WebSocket.Server }) {
-    this.services = services;
-    this.wsInstance = ws;
-    this.initializeServices();
-    this.initializeTransports()
-  }
-
-  /**
    * Initializes the services and creates default loggers for each service.
-   * @private
+   * @protected
    */
-  private initializeServices() {
+  protected initializeServices() {
     this.services.forEach((service) => {
       this.scribeHall.add(service, this.createDefaultLogger({ service }));
     });
@@ -362,9 +359,9 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
    * @template Service - The type of the service.
    * @param {MagikLogOptions<Service>} opts - The options for the logger.
    * @returns {MagikLogger} The created logger.
-   * @private
+   * @protected
    */
-  private createDefaultLogger<Service extends Services[number] = Services[number]>(opts: MagikLogOptions<Service>): MagikLogger<Service> {
+  protected createDefaultLogger<Service extends Services[number] = Services[number]>(opts: MagikLogOptions<Service>): MagikLogger<Service> {
     const { service, ...options } = opts;
     const productionTransports = [
       new DailyRotateFile({
