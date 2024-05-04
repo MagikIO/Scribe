@@ -1,7 +1,6 @@
 import Entity from '@anandamideio/entity';
 import consola from 'consola';
-import CustomTransport from 'winston-transport';
-import WebSocket from 'ws';
+import { WebSocketServer } from 'ws';
 import gradient from 'gradient-string';
 import { createLogger, format, Logger, transports, type LoggerOptions } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
@@ -178,11 +177,11 @@ class ConsolaTransport extends transports.Console {
 }
 
 class WebSocketConsolaTransport extends transports.Console {
-  protected wss: WebSocket.Server;
+  protected wss: WebSocketServer;
 
   constructor(options: any & { server: Server, debug?: boolean }) {
     super(options);
-    this.wss = new WebSocket.Server({ server: options.server });
+    this.wss = new WebSocketServer({ server: options.server, noServer: true });
     if (options.debug) consola.info('MagikWebSocketTransport initialized with the following options:', options);
     this.wss.on('connection', (ws) => {
       if (options.debug) consola.info('WebSocket client connected', ws);
