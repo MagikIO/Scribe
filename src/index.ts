@@ -306,8 +306,9 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
   constructor({ services, eventEmitter }: { services: Services, eventEmitter?: EventEmitter }) {
     this.services = services;
     this.eventEmitter = eventEmitter;
+    consola.info('MagikLogs initialized with the follow:', { services, eventEmitter });
+    this.initializeTransports();
     this.initializeServices();
-    this.initializeTransports()
   }
 
   protected initializeTransports() {
