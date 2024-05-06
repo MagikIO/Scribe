@@ -176,15 +176,23 @@ class ConsolaTransport extends transports.Console {
   }
 }
 
+interface NewWebSocketServerConfig { port: number }
+interface SharedWebSocketServerConfig { server: Server }
+interface NoServerConfig { noServer: boolean }
+interface OptionalParams { debug?: boolean }
+type WSConsolaTransportConf = (NewWebSocketServerConfig | SharedWebSocketServerConfig | NoServerConfig) & OptionalParams;
+
 class WebSocketConsolaTransport extends transports.Console {
   protected wss: WebSocketServer;
+  protected debug = false;
 
-  constructor(options: any & { server: Server, debug?: boolean }) {
+  constructor(options: any & WSConsolaTransportConf) {
     super(options);
-    this.wss = new WebSocketServer({ server: options.server, noServer: true });
-    if (options.debug) consola.info('MagikWebSocketTransport initialized with the following options:', options);
+    this.debug = options.debug ?? false;
+    this.wss = new WebSocketServer({ server: options.server, port: options.port, noServer: options.noServer });
+    if (this.debug) consola.info('MagikWebSocketTransport initialized with the following options:', options);
     this.wss.on('connection', (ws) => {
-      if (options.debug) consola.info('WebSocket client connected', ws);
+      if (this.debug) consola.info('WebSocket client connected', ws);
       this.wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
           client.send('MagikScribe has noticed as new client, welcome');
