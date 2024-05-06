@@ -175,32 +175,36 @@ class ConsolaTransport extends transports.Console {
     callback();
   }
 }
-
-interface NewWebSocketServerConfig { port: number }
-interface SharedWebSocketServerConfig { server: Server }
-interface NoServerConfig { noServer: boolean }
-interface OptionalParams { debug?: boolean }
-type WSConsolaTransportConf = (NewWebSocketServerConfig | SharedWebSocketServerConfig | NoServerConfig) & OptionalParams;
+export interface WebSocketTransportConfig {
+  httpServer?: Server,
+  debug?: boolean,
+}
 
 class WebSocketConsolaTransport extends transports.Console {
   protected wss: WebSocketServer;
   protected debug = false;
-
-  private initializeWebSocketServer(options: (NewWebSocketServerConfig | SharedWebSocketServerConfig | NoServerConfig)) {
-    if (options) {
-      if (this.debug) consola.info('MagikWebSocketTransport initialized with the following options:', options);
-      if ('port' in options) return new WebSocketServer({ port: options.port });
-      if ('server' in options) return new WebSocketServer({ server: options.server });
-      if ('noServer' in options) return new WebSocketServer({ noServer: options.noServer });
-    }
-    return new WebSocketServer({ port: 8080 });
-  }
+  protected options: WebSocketTransportConfig;
 
   protected heartbeat(ws: WebSocket & { isAlive: boolean }) {
     ws.isAlive = true;
   }
 
-  protected prependListeners() {
+  protected heartbeatInterval = setInterval(() => {
+    this.wss.clients.forEach((ws) => {
+      const socket = ws as WebSocket & { isAlive: boolean };
+      if (socket.isAlive === false) return socket.terminate();
+
+      socket.isAlive = false;
+      socket.ping();
+    });
+  }, 30000)
+
+  constructor(options: any & WebSocketTransportConfig) {
+    super(options);
+    this.debug = options.debug ?? false;
+    this.options = options;
+
+    this.wss = new WebSocketServer({ noServer: true });
     this.wss.on('connection', (ws: WebSocket & { isAlive: boolean }) => {
       ws.isAlive = true;
       ws.on('error', consola.error)
@@ -228,24 +232,19 @@ class WebSocketConsolaTransport extends transports.Console {
     this.wss.on('close', () => {
       clearInterval(this.heartbeatInterval);
     });
-  }
 
-  protected heartbeatInterval = setInterval(() => {
-    this.wss.clients.forEach((ws) => {
-      const socket = ws as WebSocket & { isAlive: boolean };
-      if (socket.isAlive === false) return socket.terminate();
+    if ('httpServer' in this.options && this.options.httpServer) {
+      this.options.httpServer.on('close', () => {
+        clearInterval(this.heartbeatInterval);
+        this.wss.close();
+      });
 
-      socket.isAlive = false;
-      socket.ping();
-    });
-  }, 30000)
-
-  constructor(options: any & WSConsolaTransportConf) {
-    super(options);
-    this.debug = options.debug ?? false;
-
-    this.wss = this.initializeWebSocketServer(options);
-    this.prependListeners();
+      this.options.httpServer.on('upgrade', (request, socket, head) => {
+        this.wss.handleUpgrade(request, socket, head, (ws) => {
+          this.wss.emit('connection', ws, request);
+        });
+      });
+    }
   }
 
   log(info: { level: keyof typeof MagikLogTransportLevels['levels']; message: string; }, callback: () => void) {
@@ -404,7 +403,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
     }),
   ]
 
-  public devLogWithWebSocketTransports = (conf: WSConsolaTransportConf) => ([
+  public devLogWithWebSocketTransports = (conf: WebSocketTransportConfig) => ([
     new WebSocketConsolaTransport({
       ...conf,
       format: filterLevelsThenFormatForConsola({ min: 'error', max: 'box' }),
@@ -445,7 +444,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
     ] as TransportStream[];
 
     if (this.eventEmitter) {
-      this.eventEmitter.on('Magik:ServerStarted', (conf: WSConsolaTransportConf) => {
+      this.eventEmitter.on('Magik:ServerStarted', (conf: WebSocketTransportConfig) => {
         if (this.debug) consola.info('WebSocketTransport initialized with the following options:', { conf });
         return createLogger({
           levels: this.transportLevels,
