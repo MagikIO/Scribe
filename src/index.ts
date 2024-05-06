@@ -1,6 +1,6 @@
 import Entity from '@anandamideio/entity';
 import consola from 'consola';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import gradient from 'gradient-string';
 import { createLogger, format, Logger, transports, type LoggerOptions } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
@@ -186,18 +186,68 @@ class WebSocketConsolaTransport extends transports.Console {
   protected wss: WebSocketServer;
   protected debug = false;
 
+  private initializeWebSocketServer(options: (NewWebSocketServerConfig | SharedWebSocketServerConfig | NoServerConfig)) {
+    if (options) {
+      if (this.debug) consola.info('MagikWebSocketTransport initialized with the following options:', options);
+      if ('port' in options) return new WebSocketServer({ port: options.port });
+      if ('server' in options) return new WebSocketServer({ server: options.server });
+      if ('noServer' in options) return new WebSocketServer({ noServer: options.noServer });
+    }
+    return new WebSocketServer({ port: 8080 });
+  }
+
+  protected heartbeat(ws: WebSocket & { isAlive: boolean }) {
+    ws.isAlive = true;
+  }
+
+  protected prependListeners() {
+    this.wss.on('connection', (ws: WebSocket & { isAlive: boolean }) => {
+      ws.isAlive = true;
+      ws.on('error', consola.error)
+      ws.on('pong', this.heartbeat.bind(null, ws));
+      ws.on('message', (data, isBinary) => {
+        this.wss.clients.forEach((client) => {
+          if (isBinary) {
+            consola.info('Received binary data:', data);
+          } else {
+            consola.info('Received text data:', data);
+          }
+
+          if (client !== ws && client.readyState === WebSocket.OPEN) {
+            client.send(data, { binary: isBinary });
+          }
+        })
+      })
+
+      if (this.debug) consola.info('WebSocket client connected', ws);
+      this.wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) client.send('MagikScribe has noticed as new client, welcome');
+      });
+    });
+
+    this.wss.on('close', () => {
+      clearInterval(this.heartbeatInterval);
+    });
+  }
+
+  protected heartbeatInterval = setInterval(() => {
+    this.wss.clients.forEach((ws) => {
+      const socket = ws as WebSocket & { isAlive: boolean };
+      if (socket.isAlive === false) return socket.terminate();
+
+      socket.isAlive = false;
+      socket.ping();
+    });
+  }, 30000)
+
   constructor(options: any & WSConsolaTransportConf) {
     super(options);
     this.debug = options.debug ?? false;
-    this.wss = new WebSocketServer({ server: options.server, port: options.port, noServer: options.noServer });
-    if (this.debug) consola.info('MagikWebSocketTransport initialized with the following options:', options);
+
+    this.wss = this.initializeWebSocketServer(options);
+
     this.wss.on('connection', (ws) => {
-      if (this.debug) consola.info('WebSocket client connected', ws);
-      this.wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send('MagikScribe has noticed as new client, welcome');
-        }
-      });
+
     });
   }
 
