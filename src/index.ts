@@ -245,10 +245,7 @@ class WebSocketConsolaTransport extends transports.Console {
     this.debug = options.debug ?? false;
 
     this.wss = this.initializeWebSocketServer(options);
-
-    this.wss.on('connection', (ws) => {
-
-    });
+    this.prependListeners();
   }
 
   log(info: { level: keyof typeof MagikLogTransportLevels['levels']; message: string; }, callback: () => void) {
@@ -407,14 +404,10 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
     }),
   ]
 
-  public devLogWithWebSocketTransports = (server: Server) => ([
+  public devLogWithWebSocketTransports = (conf: WSConsolaTransportConf) => ([
     new WebSocketConsolaTransport({
-      server,
-      format: filterLevelsThenFormatForConsola({ min: 'error', max: 'internal' }),
-    }),
-    new WebSocketConsolaTransport({
-      server,
-      level: 'box', format: filterLevelsThenFormatForConsola({ min: 'box', max: 'box' }),
+      ...conf,
+      format: filterLevelsThenFormatForConsola({ min: 'error', max: 'box' }),
     }),
   ])
 
@@ -452,12 +445,12 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
     ] as TransportStream[];
 
     if (this.eventEmitter) {
-      this.eventEmitter.on('Magik:ServerStarted', (server: Server) => {
-        if (this.debug) consola.info('WebSocketTransport initialized with the following options:', { server });
+      this.eventEmitter.on('Magik:ServerStarted', (conf: WSConsolaTransportConf) => {
+        if (this.debug) consola.info('WebSocketTransport initialized with the following options:', { conf });
         return createLogger({
           levels: this.transportLevels,
           defaultMeta: { service, ...options.defaultMeta },
-          transports: this.devLogWithWebSocketTransports(server),
+          transports: this.devLogWithWebSocketTransports(conf),
         }) as MagikLogger<typeof service>;
       })
     }
