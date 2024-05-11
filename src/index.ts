@@ -370,6 +370,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
   protected services: Services = [] as unknown as Services;
   protected scribeHall: Entity<MagikLogger, Services[number]> = new Entity();
   protected eventEmitter?: EventEmitter
+  protected useWebSocket = false;
   protected debug = false;
 
   /** The transport levels for logging */
@@ -389,7 +390,11 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
   constructor({ services, eventEmitter, debug }: { services: Services, eventEmitter?: EventEmitter, debug?: boolean }) {
     this.debug = debug ?? false;
     this.services = services;
-    this.eventEmitter = eventEmitter;
+    if (eventEmitter) {
+      this.useWebSocket = true;
+      this.eventEmitter = eventEmitter;
+    }
+
     this.initializeServices();
   }
 
@@ -410,6 +415,20 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
     }),
   ])
 
+  public productionTransports = (service: string) => ([
+    new DailyRotateFile({
+      filename: `./logs/${service}/%DATE%/error-logs.log`,
+      ...MagikLogs.defaultLogFileOptions,
+      level: 'error',
+      format: filterLevelsThenFormatAsJSON({ min: 'error' }),
+    }),
+    new DailyRotateFile({
+      filename: `./logs/${service}/%DATE%/general-logs.log`,
+      ...MagikLogs.defaultLogFileOptions,
+      format: filterLevelsThenFormatAsJSON({ min: 'warn', max: 'debug' }),
+    }),
+  ] as TransportStream[]);
+
   /**
    * Initializes the services and creates default loggers for each service.
    * @protected
@@ -429,21 +448,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
    */
   protected createDefaultLogger<Service extends Services[number] = Services[number]>(opts: MagikLogOptions<Service>): MagikLogger<Service> {
     const { service, ...options } = opts;
-    const productionTransports = [
-      new DailyRotateFile({
-        filename: `./logs/${service}/%DATE%/error-logs.log`,
-        ...MagikLogs.defaultLogFileOptions,
-        level: 'error',
-        format: filterLevelsThenFormatAsJSON({ min: 'error' }),
-      }),
-      new DailyRotateFile({
-        filename: `./logs/${service}/%DATE%/general-logs.log`,
-        ...MagikLogs.defaultLogFileOptions,
-        format: filterLevelsThenFormatAsJSON({ min: 'warn', max: 'debug' }),
-      }),
-    ] as TransportStream[];
-
-    if (this.eventEmitter) {
+    if (this.useWebSocket && this.eventEmitter) {
       this.eventEmitter.on('Magik:ServerStarted', (conf: WebSocketTransportConfig) => {
         if (this.debug) consola.info('WebSocketTransport initialized with the following options:', { conf });
         return createLogger({
@@ -458,8 +463,8 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
       levels: this.transportLevels,
       defaultMeta: { service, ...options.defaultMeta },
       transports: (process.env.NODE_ENV === 'production')
-        ? productionTransports
-        : this.devLogTransports,
+        ? this.productionTransports(service)
+        : (this.useWebSocket) ? this.devLogWithWebSocketTransports({ debug: this.debug }) : this.devLogTransports,
     }) as MagikLogger<typeof service>;
   }
 
@@ -493,7 +498,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
    * Gets all the services in the hall of scribes.
    * @returns {Array<Services[number]>} The array of services.
    */
-  public getAllServices() {
+  public getAllServices(): Array<Services[number]> {
     return this.scribeHall.getAllIdentifiers();
   }
 
@@ -501,7 +506,7 @@ export class MagikLogs<Services extends Array<string> = Array<string>> {
    * Gets all the loggers in the hall of scribes.
    * @returns {Record<Services[number], MagikLogger>} The record of loggers.
    */
-  public getAllLoggers() {
+  public getAllLoggers(): Record<Services[number], MagikLogger> {
     return this.scribeHall.getAllEntities();
   }
 
