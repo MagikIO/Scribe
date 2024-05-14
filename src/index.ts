@@ -151,7 +151,7 @@ class ConsolaTransport extends transports.Console {
 
     if (level === 'error') {
       consola.error(formattedMessage);
-      console.trace(meta);
+      if ('includesTrace' in meta && meta.includesTrace) console.trace(meta);
     } else if (level === 'warn') {
       consola.warn(formattedMessage);
     } else if (level === 'info') {
