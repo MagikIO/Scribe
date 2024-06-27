@@ -7,3 +7,4 @@ eslint.config.*
 .editorconfig
 .gitattributes
 .gitignore
+node_modules

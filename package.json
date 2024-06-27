@@ -3,7 +3,8 @@
   "version": "3.1.0",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "iterate": "npm version patch && git push origin main --tags && npm publish --access public"
   },
   "files": [
     "dist"
@@ -18,28 +19,26 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@anandamideio/entity": "^1.4.1",
+    "@anandamideio/entity": "^1.4.2",
+    "bufferutil": "^4.0.8",
     "consola": "^3.2.3",
     "gradient-string": "^2.0.2",
     "winston": "^3.13.0",
     "winston-daily-rotate-file": "^5.0.0",
     "winston-transport": "^4.7.0",
-    "ws": "^8.17.0"
+    "ws": "^8.17.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.2.0",
-    "@magik_io/lint_golem": "^2.1.1",
+    "@eslint/js": "^9.5.0",
+    "@magik_io/lint_golem": "^2.2.1",
     "@types/eslint": "^8.56.10",
     "@types/eslint__js": "^8.42.3",
     "@types/gradient-string": "^1.1.6",
-    "@types/node": "^20.12.11",
+    "@types/node": "^20.14.9",
     "@types/ws": "^8.5.10",
-    "eslint": "^9.2.0",
-    "typescript": "^5.4.5",
-    "typescript-eslint": "^7.8.0"
+    "eslint": "^9.5.0",
+    "typescript": "^5.5.2",
+    "typescript-eslint": "^7.14.1"
   },
-  "optionalDependencies": {
-    "bufferutil": "^4.0.8"
-  },
-  "packageManager": "yarn@4.2.2"
+  "packageManager": "yarn@4.3.1"
 }
