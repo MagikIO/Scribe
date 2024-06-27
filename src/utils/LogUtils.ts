@@ -1,4 +1,4 @@
-import * as gradient from 'gradient-string';
+import gradient from 'gradient-string';
 
 export enum LogLevel {
   error = 0,
