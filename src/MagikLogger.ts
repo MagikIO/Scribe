@@ -1,5 +1,5 @@
 import { Logger, type LoggerOptions } from 'winston';
-import type { LogLevel } from './utils/LogUtils';
+import { LogLevel, LogLevelRecord } from './utils/LogUtils';
 
 type UniqueLogKeys = Exclude<keyof typeof LogLevel, keyof Logger>;
 type UniqueLogMethods = Record<UniqueLogKeys, (message: string, meta?: unknown) => void>;
@@ -25,4 +25,10 @@ export class MagikLogger<
   internal(message: string, meta?: unknown) {
     return this.log({ level: 'internal', message, meta });
   }
+}
+
+export function createMagikLogger<ServiceName extends string = string>(opts: LoggerOptions & { service: ServiceName }) {
+  opts.levels = opts.levels ?? LogLevelRecord;
+
+  return new MagikLogger(opts);
 }

@@ -1,15 +1,13 @@
 import consola from 'consola';
-import { createLogger, type LoggerOptions } from 'winston';
-import DailyRotateFile, { type EventEmitter } from 'winston-daily-rotate-file';
+import { type LoggerOptions } from 'winston';
+import DailyRotateFile from 'winston-daily-rotate-file';
 import type TransportStream from 'winston-transport';
-import type { MagikLogger } from './MagikLogger';
+import { createMagikLogger, type MagikLogger } from './MagikLogger';
 import { LogFormatters } from './utils/LogFormatters';
 import { LogLevelRecord, LogUtils } from './utils/LogUtils';
 import { ConsolaTransport } from './utils/Transports';
 
-interface MagikLogOptions<Service extends string = string> extends LoggerOptions {
-  service: Service;
-}
+interface MagikLogOptions<Service extends string = string> extends LoggerOptions { service: Service; }
 
 /**
  * Welcome to `MagikLogs`, a home to digital scribes (loggers);
@@ -36,72 +34,74 @@ interface MagikLogOptions<Service extends string = string> extends LoggerOptions
  * console.log(serverIsGone); // true
  */
 export class MagikLogs<Services extends string = string> {
-  protected services: Array<Services>;
+  protected services: ReadonlyArray<Services>;
   protected scribeHall = new Map<Services, MagikLogger>();
-  protected eventEmitter?: EventEmitter
-  protected useWebSocket = false;
+
   protected debug = false;
 
-  /** Default options for log file */
-  public static defaultLogFileOptions = {
-    datePattern: 'MM-DD-YYYY',
+  private DEFAULT_logFileOptions = {
+    datePattern: 'MM-DD-YYYY' as const,
     zippedArchive: true,
-    maxSize: '20m',
-    maxFiles: '14d',
-  }
-
+    maxSize: '20m' as const,
+    maxFiles: '14d' as const,
+  };
   /** Constructs a new instance of MagikLogs */
-  constructor({ services, eventEmitter, debug }: { services: Array<Services>, eventEmitter?: EventEmitter, debug?: boolean }) {
+  constructor({ services, debug }: { services: Array<Services | MagikLogOptions<Services>> | ReadonlyArray<Services | MagikLogOptions<Services>>, debug?: boolean }) {
     this.debug = debug ?? false;
-    this.services = services;
-    if (eventEmitter) {
-      this.useWebSocket = true;
-      this.eventEmitter = eventEmitter;
-    }
+    if (!services || services.length === 0) throw new Error('MagikLogs requires at least one service to be initialized.');
 
-    this.initializeServices();
+    const servicesToInit: Array<Services> = [];
+
+    if (this.debug) this._prettyLogBox('MagikLogs', `Initializing MagikLogs with services: ${services.join(', ')}`);
+    services.forEach((s) => {
+      if (typeof s === 'string') {
+        servicesToInit.push(s);
+        this.add(s);
+      } else {
+        servicesToInit.push(s.service);
+        this.scribeHall.set(s.service, this.createDefaultLogger(s));
+      }
+    })
+
+    this.services = servicesToInit as ReadonlyArray<Services>;
   }
 
   /** Development log transports. */
   public devLogTransports: Array<ConsolaTransport> = [
     new ConsolaTransport({ format: LogFormatters.filterLevelsThenFormatForConsola({ min: 'error', max: 'internal' }) }),
-    new ConsolaTransport({
-      level: 'box',
-      format: LogFormatters.filterLevelsThenFormatForConsola({ min: 'box', max: 'box' }),
-    }),
+    new ConsolaTransport({ level: 'box', format: LogFormatters.filterLevelsThenFormatForConsola({ min: 'box', max: 'box' }) }),
   ]
 
-  public productionTransports = (service: Services) => ([
-    new DailyRotateFile({
-      filename: `./logs/${service}/%DATE%/error-logs.log`,
-      ...MagikLogs.defaultLogFileOptions,
-      level: 'error',
-      format: LogFormatters.filterLevelsThenFormatAsJSON({ min: 'error' }),
-    }),
-    new DailyRotateFile({
-      filename: `./logs/${service}/%DATE%/general-logs.log`,
-      ...MagikLogs.defaultLogFileOptions,
-      format: LogFormatters.filterLevelsThenFormatAsJSON({ min: 'warn', max: 'debug' }),
-    }),
-  ] as TransportStream[]);
+  public productionTransports = (service: Services) => {
+    const options = this.DEFAULT_logFileOptions;
 
-  /** Initializes the services and creates default loggers for each service */
-  protected initializeServices() {
-    this.services.forEach((service) => {
-      this.scribeHall.set(service, this.createDefaultLogger({ service }));
-    });
+    return ([
+      new DailyRotateFile({
+        filename: `./logs/${service}/%DATE%/error-logs.log`,
+        ...options,
+        level: 'error',
+        format: LogFormatters.filterLevelsThenFormatAsJSON({ min: 'error' }),
+      }),
+      new DailyRotateFile({
+        filename: `./logs/${service}/%DATE%/general-logs.log`,
+        ...options,
+        format: LogFormatters.filterLevelsThenFormatAsJSON({ min: 'warn', max: 'debug' }),
+      }),
+    ] as TransportStream[]);
   }
+
 
   /** Creates a default logger for a service */
   protected createDefaultLogger<Service extends Services = Services>(opts: MagikLogOptions<Service>) {
     const { service, ...options } = opts;
 
-    return createLogger({
+    return createMagikLogger({
+      service,
       levels: LogLevelRecord,
-      defaultMeta: { service, ...options.defaultMeta },
+      defaultMeta: (options.defaultMeta) ? { ...options.defaultMeta, service } : { service },
       transports: (process.env.NODE_ENV === 'production')
         ? this.productionTransports(service)
-        : this.devLogTransports,
+        : [...this.devLogTransports, ...this.productionTransports(service)],
     }) as MagikLogger<typeof service>;
   }
 
