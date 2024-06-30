@@ -29,6 +29,7 @@ export class LogUtils {
 
   public static getLevel(level: keyof typeof LogLevel | string): LogLevel {
     if (typeof level !== 'string') throw new Error(`LogLevel expected a string, but got ${typeof level}`);
+    level = level.toLowerCase();
     // If it's a string lets check if it's a valid log level
     const levelNames = Object.keys(LogLevel).filter(key => isNaN(Number(key)));
     if (!levelNames.includes(level)) throw new Error(`Invalid log level: ${level}`);

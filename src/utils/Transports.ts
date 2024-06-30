@@ -23,6 +23,8 @@ export class ConsolaTransport extends transports.Console {
       consola.debug(formattedMessage);
     } else if (level === 'success') {
       consola.success(formattedMessage);
+    } else if (level === 'internal') {
+      consola.log(formattedMessage);
     } else if (level === 'box') {
       if ('name' in meta && typeof meta.name === 'string') {
         // Inform the user this may take a while
@@ -35,7 +37,7 @@ export class ConsolaTransport extends transports.Console {
       } else {
         consola.box(formattedMessage);
       }
-    } else if (level === 'internal') {
+    } else {
       consola.log(formattedMessage);
     }
 

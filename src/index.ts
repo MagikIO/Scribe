@@ -85,7 +85,7 @@ export class MagikLogs<Services extends string = string> {
       new DailyRotateFile({
         filename: `./logs/${service}/%DATE%/general-logs.log`,
         ...options,
-        format: LogFormatters.filterLevelsThenFormatAsJSON({ min: 'warn', max: 'debug' }),
+        format: LogFormatters.filterLevelsThenFormatAsJSON({ min: 'warn', max: 'internal' }),
       }),
     ] as TransportStream[]);
   }
